@@ -46,10 +46,11 @@ class Topologies:
         if self.topology_type == "ring-star" or self.topology_type == "random":
             assert (type(self.n_graphs) == int) and (self.n_graphs > 0)
         self.plot_graphs = plot_graphs
-        self.gossip_matrices = self.get_matrices()
         self.max_iter = max_iter
         self.current_iter = 0
         self.__regime = 1
+        self.chi = -1
+        self.gossip_matrices = self.get_matrices()
         
     def get_matrices(self):
         result = None
@@ -87,6 +88,8 @@ class Topologies:
                 self.__regime = 1 - self.__regime
             return self.gossip_matrices[self.__regime]
             
+        
+    
     def __graph_to_matrix(self, graphs):
         result = []
         for G in graphs:
@@ -104,7 +107,9 @@ class Topologies:
             p = np.ones(W.shape[0])
             assert np.allclose(W @ p, p)
             assert np.allclose(W, W.T)
-            assert np.linalg.eigvalsh(W)[-2] < 1 + 1e-6
+            lambda2 = np.linalg.eigvalsh(W)[-2]
+            assert lambda2 < 1 + 1e-6
+            self.chi = max(self.chi, 1. / (1 - lambda2))
             result.append(W)
         return result
     
@@ -119,4 +124,3 @@ class Topologies:
                 nx.draw_networkx_edges(graphs[i],
                                        nx.rescale_layout_dict(nx.circular_layout(graphs[i]), 10),
                                        ax=axes[i])
-                                       
