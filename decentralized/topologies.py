@@ -87,8 +87,6 @@ class Topologies:
                 self.__regime = 1 - self.__regime
             return self.gossip_matrices[self.__regime]
             
-        
-    
     def __graph_to_matrix(self, graphs):
         result = []
         for G in graphs:
@@ -121,3 +119,4 @@ class Topologies:
                 nx.draw_networkx_edges(graphs[i],
                                        nx.rescale_layout_dict(nx.circular_layout(graphs[i]), 10),
                                        ax=axes[i])
+                                       
