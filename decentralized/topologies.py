@@ -88,7 +88,7 @@ class Topologies:
             return self.gossip_matrices[self.__regime]
             
         
-    
+
     def __graph_to_matrix(self, graphs):
         result = []
         for G in graphs:

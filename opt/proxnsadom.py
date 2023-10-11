@@ -1,4 +1,4 @@
-from base import BaseNode
+from opt.base import BaseNode
 
 
 class ProxNSAdomNode(BaseNode):
