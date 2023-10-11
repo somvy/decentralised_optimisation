@@ -13,10 +13,11 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
         self.max_iter: int = max_iter
 
     def step(self):
-        mixing_matrix = next(self.topology)
-        x_mixed = mixing_matrix @ self.x
-        gradients = np.vstack([oracle.grad(x_mixed) for oracle in self.oracles])
-        self.x = x_mixed - self.step_size * gradients
+        assert self.topology.matrix_type.startswith("gossip"), "works with gossip matrices only"
+        gossip_matrix = next(self.topology)
+        x_next = gossip_matrix @ self.x
+        gradients = np.vstack([oracle.grad(x_next[i]) for i, oracle in enumerate(self.oracles)])
+        self.x = x_next - self.step_size * gradients
 
     def run(self):
         for _ in range(self.max_iter):
