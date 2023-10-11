@@ -1,30 +1,52 @@
 import numpy as np
 from decentralized.topologies import Topologies
 from oracles.simple import QuadraticOracle
+from oracles.binary_svc_oracle import BinarySVC
 from methods.decentralized_gd import DecentralizedGradientDescent
+import torch
 
 
-def test_decentralized_gd():
+def test_decentralized_gd_simple_task():
     np.random.seed(0xCAFEBABE)
     dim_size = 20
     num_nodes = 10
 
-    topology: Topologies = Topologies(n=num_nodes, topology_type="ring", matrix_type="gossip-metropolis", n_graphs=5)
-    x_0 = np.random.rand(dim_size)
-    X_0 = np.vstack([x_0] * num_nodes)
-    oracles = [QuadraticOracle(A=(num_node / num_nodes) * np.eye(dim_size), b=np.zeros(dim_size))
-               for num_node in range(1, num_nodes + 1)]
+    topology: Topologies = Topologies(n=num_nodes, topology_type="ring", matrix_type="gossip-metropolis")
+    x_0 = torch.rand(dim_size)
+    oracles = [
+        QuadraticOracle(
+            A=(num_node + 1) / num_nodes * torch.eye(dim_size),
+            b=torch.zeros(dim_size),
+            x=x_0)
+        for num_node in range(num_nodes)]
 
-    method = DecentralizedGradientDescent(oracles=oracles, topology=topology, x_0=X_0, stepsize=1e-7,
+    method = DecentralizedGradientDescent(oracles=oracles, topology=topology, stepsize=1e-5,
                                           max_iter=1000)
 
     method.run()
-    print(next(topology))
-    print("chi:", topology.chi, "\n")
-    print(method.x)
-    print(method.x[0] - method.x[1])
-    assert np.all((method.x ** 2).sum(axis=1) <= 0.05)
+
+    for oracle in oracles:
+        assert torch.all(oracle.get_params()[0] < 5e-2)
 
 
+def test_decentralizes_gd_svm():
+    np.random.seed(0xCAFEBABE)
+    dim_size = 20
+    num_nodes = 10
+    samples_on_each_node = 100
 
+    topology: Topologies = Topologies(n=num_nodes, topology_type="star", matrix_type="gossip-metropolis")
+    oracles = []
 
+    for i in range(num_nodes):
+        points = torch.randn(samples_on_each_node, dim_size)
+        X = torch.cat([points + 3, points - 3])
+        y = torch.cat([torch.ones(samples_on_each_node), -torch.ones(samples_on_each_node)])
+        oracles.append(BinarySVC(X=X, y=y, alpha=0.2))
+
+    method = DecentralizedGradientDescent(oracles=oracles, topology=topology, stepsize=1e-7,
+                                          max_iter=1000)
+    method.run()
+
+    for oracle in oracles:
+        assert torch.all(oracle.get_params()[0] < 5e-2)

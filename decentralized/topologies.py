@@ -27,7 +27,7 @@ class Topologies:
     """
 
     def __init__(self, n: int, topology_type: str, matrix_type: str, n_graphs: int = None,
-                 plot_graphs: bool =False, max_iter: int = None):
+                 plot_graphs: bool = False, max_iter: int = None):
         """
         n - количество вершин/воркеров
         topology_type - вид топологии: full (полный граф), ring (кольцо), star (звезда),
@@ -57,7 +57,7 @@ class Topologies:
         result: list[nx.Graph] = []
 
         match self.topology_type:
-            case  "full":
+            case "full":
                 result = [nx.complete_graph(self.n)]
             case "ring":
                 result = [nx.cycle_graph(self.n)]
@@ -114,7 +114,6 @@ class Topologies:
             assert np.allclose(W, W.T)
 
             lambda2 = np.linalg.eigvalsh(W)
-            print("lambda 2 = ", lambda2)
             lambda2 = lambda2[:lambda2.shape[0] - 1]
             lambda2 = lambda2[lambda2 < 1][-1]
             assert lambda2 < 1

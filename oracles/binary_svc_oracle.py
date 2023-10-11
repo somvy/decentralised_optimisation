@@ -1,8 +1,18 @@
 import torch
+from oracles.base import BaseOracle
 
-class BinarySVC:
 
+class BinarySVC(BaseOracle):
   def __init__(self, X, y, alpha: float, device="cpu", w_init=None, b_init=None):
+    """
+
+    :param X: n x d
+    :param y:  -1 , 1, n x 1
+    :param alpha:
+    :param device:
+    :param w_init:
+    :param b_init:
+    """
     self.d = X.shape[1]
     self.X = X.to(device)
     self.y = y.to(device)
@@ -14,9 +24,11 @@ class BinarySVC:
       self.b = torch.ones(1, 1)
     else:
       self.b = b_init
-    for _ in [self.w, self.b]:
-      _.requires_grad = True
-      _ = _.to(device)
+
+    for param in [self.w, self.b]:
+      param.requires_grad = True
+      param = param.to(device)
+
     self.alpha = alpha
 
   def __f(self):
