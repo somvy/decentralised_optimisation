@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 class L1RegressionOracle:
     
@@ -6,22 +7,21 @@ class L1RegressionOracle:
         self.X = X
         self.y = y
         if W_init is None:
-            W_init = torch.zeros(X.shape[1], 1, dtype=X.dtype)
-        else:
-            W_init = torch.tensor(W_init, dtype=X.dtype)
+            W_init = torch.ones(X.shape[1], 1, dtype=X.dtype, requires_grad=True) / np.sqrt(X.shape[1])
+        elif type(W_init) != torch.tensor:
+            W_init = torch.tensor(W_init)
         if b_init is None:
-            b_init = torch.zeros(1, 1, dtype=X.dtype)
-        else:
-            b_init = torch.tensor(b_init, dtype=X.dtype)
-        
-        self.W = torch.autograd.Variable(W_init, requires_grad=True).to(device)
-        self.b = torch.autograd.Variable(b_init, requires_grad=True).to(device)
+            b_init = torch.ones(1, 1, dtype=X.dtype, requires_grad=True)
+        elif type(b_init) != torch.tensor:
+            b_init = torch.tensor(b_init)
+            
+        self.W = W_init.clone().detach().requires_grad_(True).to(device)
+        self.b = b_init.clone().detach().requires_grad_(True).to(device)
         self.loss = torch.nn.L1Loss(reduction="mean")
     
     @torch.no_grad()
     def __call__(self):
-        preds = self.X @ self.W + self.b
-        return self.loss(preds[:, 0], self.y)
+        return self.__f().item()
     
     def __f(self):
         preds = self.X @ self.W + self.b
