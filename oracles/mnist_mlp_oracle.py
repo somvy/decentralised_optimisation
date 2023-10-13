@@ -4,6 +4,7 @@ from torch.utils.data import Dataset, DataLoader
 from copy import deepcopy
 from oracles.base import BaseOracle
 from tqdm.auto import tqdm
+from itertools import cycle
 
 
 class MLP(nn.Module):
@@ -34,11 +35,11 @@ class MLP(nn.Module):
         return self.layers(x)
 
 
-class MNISTMLP:
+class MNISTMLP(BaseOracle):
 
     def __init__(self, Xy: Dataset, init_network: nn.Module, batch_size=128, device="cpu"):
         self.data = DataLoader(Xy, shuffle=False, batch_size=batch_size)
-        self.iter_data = iter(self.data)
+        self.iter_data = cycle(iter(self.data))
         self.bs = batch_size
         self.net = MLP()
         self.net.load_state_dict(deepcopy(init_network.state_dict()))
@@ -47,16 +48,12 @@ class MNISTMLP:
         self.net = self.net.to(device)
         self.loss = nn.CrossEntropyLoss()
         self.device = device
-        
+
     def __f(self):
-      try:
         X, y = next(self.iter_data)
-      except:
-        self.iter_data = iter(self.data)
-        X, y = next(self.iter_data)
-      X, y = X.to(self.device), y.to(self.device)
-      y_pred = self.net(X)
-      return self.loss(y_pred, y)
+        X, y = X.to(self.device), y.to(self.device)
+        y_pred = self.net(X)
+        return self.loss(y_pred, y)
 
     def __call__(self):
         with torch.no_grad():
@@ -64,8 +61,7 @@ class MNISTMLP:
 
     def grad(self):
         for p in self.net.parameters():
-            # p.grad = None
-            pass
+            p.grad = None
         loss = self.__f()
         loss.backward()
         grads = [p.grad for p in self.net.parameters()]
@@ -79,5 +75,6 @@ class MNISTMLP:
 
     def set_params(self, params):
         for (p_old, p_new) in zip(self.net.parameters(), params):
+            assert p_old.shape == p_new.shape
             p_old.data = p_new.clone().detach()
             p_old.requires_grad = True
