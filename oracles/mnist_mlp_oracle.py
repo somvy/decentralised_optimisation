@@ -34,10 +34,11 @@ class MLP(nn.Module):
         return self.layers(x)
 
 
-class MNISTMLP(BaseOracle):
+class MNISTMLP:
 
     def __init__(self, Xy: Dataset, init_network: nn.Module, batch_size=128, device="cpu"):
         self.data = DataLoader(Xy, shuffle=False, batch_size=batch_size)
+        self.iter_data = iter(self.data)
         self.bs = batch_size
         self.net = MLP()
         self.net.load_state_dict(deepcopy(init_network.state_dict()))
@@ -46,16 +47,16 @@ class MNISTMLP(BaseOracle):
         self.net = self.net.to(device)
         self.loss = nn.CrossEntropyLoss()
         self.device = device
-
-    def __f(self) -> torch.tensor:
-        loss = torch.tensor(0., device=self.device)
-        n_samples = 0
-        for (X, y) in self.data:
-            X, y = X.to(self.device), y.to(self.device)
-            y_pred = self.net(X)
-            loss += self.loss(y_pred, y)
-        loss /= len(self.data)
-        return loss
+        
+    def __f(self):
+      try:
+        X, y = next(self.iter_data)
+      except:
+        self.iter_data = iter(self.data)
+        X, y = next(self.iter_data)
+      X, y = X.to(self.device), y.to(self.device)
+      y_pred = self.net(X)
+      return self.loss(y_pred, y)
 
     def __call__(self):
         with torch.no_grad():
