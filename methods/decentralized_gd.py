@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import torch
 from torch import tensor
@@ -23,7 +25,7 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
         layers_count: int = len(total_parameters[0])
         new_params_by_layer: list[tensor] = []
 
-        # accumulate params and grads by layer
+        # accumulate params and grads by layer, then update params
         for layer_num in range(layers_count):
             x: tensor = torch.stack([oracle_params[layer_num] for oracle_params in total_parameters])
             # apply gossip matrix to params
@@ -31,7 +33,7 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
 
             layer_gradients = torch.stack([oracle_grads[layer_num] for oracle_grads in total_gradients])
             x_next -= self.step_size * layer_gradients
-            new_params_by_layer.append(x)
+            new_params_by_layer.append(x_next)
 
         for oracle_num, oracle in enumerate(self.oracles):
             oracle.set_params(
@@ -39,13 +41,14 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
             )
 
     def run(self, log: bool = False):
-        if log:
-            self.log()
         for _ in range(self.max_iter):
             self.step()
             if log:
-                self.log()
+                self.logs.append(self.log())
 
-    def log(self):
+    def log(self) -> dict[str, Any]:
         losses = [oracle() for oracle in self.oracles]
-        print(f"losses: {sum(losses) / len(losses)}| {losses}")
+        return {
+            "loss": sum(losses) / len(losses),
+            "losses": losses
+        }

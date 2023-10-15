@@ -1,5 +1,6 @@
 from oracles.base import BaseOracle
 from torch import tensor
+import torch
 
 
 class QuadraticOracle(BaseOracle):
@@ -18,11 +19,11 @@ class QuadraticOracle(BaseOracle):
         self.b = b
         self.x = x
 
-    def __call__(self):
-        return 0.5 * (self.x.T @ self.A) @ self.x - self.b @ self.x
+    def __call__(self) -> float:
+        return (0.5 * (self.x.T @ self.A) @ self.x - self.b.T @ self.x).item()
 
     def grad(self) -> list[tensor]:
-        return [0.5 * (self.x.unsqueeze(1) @ self.x.T.unsqueeze(0)), -self.x]
+        return [0.5 * (self.x @ self.x.T), -self.x]
 
     def get_params(self) -> list[tensor]:
         return [self.A, self.b]
