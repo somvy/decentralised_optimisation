@@ -3,5 +3,7 @@ __pycache__/
 .pytest_cache
 MNIST
 test/MNIST
+*.png
+*.svg
 L1_regression.ipynb
 .ipynb_checkpoints/
