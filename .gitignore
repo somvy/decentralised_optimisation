@@ -4,3 +4,4 @@ __pycache__/
 MNIST
 test/MNIST
 L1_regression.ipynb
+.ipynb_checkpoints/
