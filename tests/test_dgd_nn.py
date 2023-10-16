@@ -23,7 +23,7 @@ def test_decentralized_gd_nn():
         oracle = MNISTMLP(Xy=subset, init_network=init_model)
         oracles.append(oracle)
 
-    method = DecentralizedGradientDescent(oracles=oracles, topology=topology, stepsize=4e-3, max_iter=40000)
+    method = DecentralizedGradientDescent(oracles=oracles, topology=topology, stepsize=1, max_iter=40000)
     loss = sum([oracle() for oracle in oracles]) / len(oracles)
     method.run(log=True)
 

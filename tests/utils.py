@@ -3,11 +3,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 sns.set_style("darkgrid")
-font =  {
-            'family': 'DejaVu Sans',
-            'weight': 'normal',
-            'size'  :  14
-        }
+font = {
+    'family': 'DejaVu Sans',
+    'weight': 'normal',
+    'size': 14
+}
 
 matplotlib.rc('font', **font)
 
