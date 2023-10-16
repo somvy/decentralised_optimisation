@@ -26,7 +26,7 @@ def test_decentralized_gd_simple_task():
                                           max_iter=100)
 
     method.run(log=True)
-    save_plot(method.logs, "dgd_simple.png")
+    save_plot(method.logs, "dgd_simple.svg")
 
     for oracle in oracles:
         assert torch.all(oracle.get_params()[0] <= 5e-2)
@@ -50,7 +50,7 @@ def test_decentralized_gd_svm():
     method = DecentralizedGradientDescent(oracles=oracles, topology=topology, stepsize=1e-7,
                                           max_iter=1000)
     method.run(log=True)
-    save_plot(method.logs, "dgd_svm.png")
+    save_plot(method.logs, "dgd_svm.svg")
 
     for oracle in oracles:
         assert torch.all(oracle.get_params()[0] < 5e-2)
@@ -77,7 +77,7 @@ def test_decentralized_gd_l1regression():
     method = DecentralizedGradientDescent(oracles=oracles, topology=topology, stepsize=1e-7, max_iter=1000)
 
     method.run(log=True)
-    save_plot(method.logs, "dgd_l1reg.png")
+    save_plot(method.logs, "dgd_l1reg.svg")
 
     print_metrics([oracle.metrics() for oracle in oracles])
 

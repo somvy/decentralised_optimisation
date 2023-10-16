@@ -51,26 +51,25 @@ class Topologies:
         self.current_iter = 0
         self.__regime: bool = True
         self.chi = -1
+        self.lambda_max = 1
         self.matrices = self.get_matrices()
 
     def get_matrices(self) -> list[nx.Graph]:
         result: list[nx.Graph] = []
 
-        match self.topology_type:
-            case "full":
-                result = [nx.complete_graph(self.n)]
-            case "ring":
-                result = [nx.cycle_graph(self.n)]
-            case "star":
-                result = [nx.star_graph(self.n - 1)]
-            case "ring-star":
-                result = [nx.cycle_graph(self.n), nx.star_graph(self.n - 1)]
-
-            case "random":
-                for _ in range(self.n_graphs):
-                    g = nx.gnp_random_graph(self.n, 0.5)
-                    if not nx.is_connected(g):
-                        g = nx.complement(g)
+        if self.topology_type == "full":
+            result = [nx.complete_graph(self.n)]
+        if self.topology_type == "ring":
+            result = [nx.cycle_graph(self.n)]
+        if self.topology_type == "star":
+            result = [nx.star_graph(self.n - 1)]
+        if self.topology_type == "ring-star":
+            result = [nx.cycle_graph(self.n), nx.star_graph(self.n - 1)]
+        if self.topology_type == "random":
+            for _ in range(self.n_graphs):
+                g = nx.gnp_random_graph(self.n, 0.5)
+                if not nx.is_connected(g):
+                    g = nx.complement(g)
                     result.append(g)
 
         if self.plot_graphs:
@@ -106,8 +105,8 @@ class Topologies:
 
             if self.matrix_type.endswith("laplacian"):
                 L = nx.laplacian_matrix(G).todense()
-                v = np.linalg.eigvalsh(L)[-1]
-                W = np.eye(L.shape[0]) - L / v
+                self.lambda_max = np.linalg.eigvalsh(L)[-1]
+                W = np.eye(L.shape[0]) - L / self.lambda_max
 
             ones = np.ones(W.shape[0])
             assert np.allclose(W @ ones, ones)
