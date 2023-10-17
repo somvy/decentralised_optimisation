@@ -1,6 +1,5 @@
 from typing import Any
 
-import numpy as np
 import torch
 from torch import tensor
 
@@ -16,7 +15,7 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
         self.step_size: float = stepsize
         self.max_iter: int = max_iter
 
-    def step(self):
+    def step(self, k: int = 0):
         assert self.topology.matrix_type.startswith("gossip"), "works with gossip matrices only yet"
         gossip_matrix: tensor = tensor(next(self.topology), dtype=torch.float)
 
@@ -29,10 +28,11 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
         for layer_num in range(layers_count):
             x: tensor = torch.stack([oracle_params[layer_num] for oracle_params in total_parameters])
             # apply gossip matrix to params
-            x_next = torch.einsum("nn,nd...->nd...", gossip_matrix, x)
+            n, *d = x.shape
+            x_next = torch.matmul(gossip_matrix, x.view(n, -1)).view(n, *d)
 
             layer_gradients = torch.stack([oracle_grads[layer_num] for oracle_grads in total_gradients])
-            x_next -= self.step_size * layer_gradients
+            x_next -= self.step_size / k * layer_gradients
             new_params_by_layer.append(x_next)
 
         for oracle_num, oracle in enumerate(self.oracles):
@@ -41,8 +41,8 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
             )
 
     def run(self, log: bool = False):
-        for _ in range(self.max_iter):
-            self.step()
+        for k in range(1, self.max_iter + 1):
+            self.step(k)
             if log:
                 self.logs.append(self.log())
 
