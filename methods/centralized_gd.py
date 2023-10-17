@@ -35,6 +35,8 @@ class CentralizedGradientDescent(BaseDecentralizedMethod):
             )
 
     def run(self, log: bool = False):
+        if log:
+            self.logs.append(self.log())
         for _ in range(self.max_iter):
             self.step()
             if log:

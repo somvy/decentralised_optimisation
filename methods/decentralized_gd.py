@@ -15,15 +15,13 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
         self.step_size: float = stepsize
         self.max_iter: int = max_iter
 
-    def step(self, k: int = 0):
-        assert self.topology.matrix_type.startswith("gossip"), "works with gossip matrices only yet"
-        gossip_matrix: tensor = tensor(next(self.topology), dtype=torch.float)
-
+    def step(self, k: int = 1):
+        # assert self.topology.matrix_type.startswith("gossip"), "works with gossip matrices only yet"
         total_parameters: list[list[tensor]] = [oracle.get_params() for oracle in self.oracles]
         total_gradients: list[list[tensor]] = [oracle.grad() for oracle in self.oracles]
         layers_count: int = len(total_parameters[0])
         new_params_by_layer: list[tensor] = []
-
+        gossip_matrix: tensor = tensor(next(self.topology), dtype=total_parameters[0][0].dtype)
         # accumulate params and grads by layer, then update params
         for layer_num in range(layers_count):
             x: tensor = torch.stack([oracle_params[layer_num] for oracle_params in total_parameters])
@@ -32,7 +30,7 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
             x_next = torch.matmul(gossip_matrix, x.view(n, -1)).view(n, *d)
 
             layer_gradients = torch.stack([oracle_grads[layer_num] for oracle_grads in total_gradients])
-            x_next -= self.step_size / k * layer_gradients
+            x_next -= self.step_size * layer_gradients
             new_params_by_layer.append(x_next)
 
         for oracle_num, oracle in enumerate(self.oracles):
@@ -41,7 +39,10 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
             )
 
     def run(self, log: bool = False):
+        if log:
+            self.logs.append(self.log())
         for k in range(1, self.max_iter + 1):
+            # print([oracle.get_params() for oracle in self.oracles])
             self.step(k)
             if log:
                 self.logs.append(self.log())
