@@ -27,37 +27,42 @@ class Topologies:
     """
 
     def __init__(self, n: int, topology_type: str, matrix_type: str, n_graphs: int = None,
-                 plot_graphs: bool = False, max_iter: int = None):
+                 plot_graphs: bool = False, max_iter: int = None, seed_list = None):
         """
         n - количество вершин/воркеров
-        topology_type - вид топологии: full (полный граф), ring (кольцо), star (звезда),
+        topology_type - вид топологии: fully connected (полный граф), ring (кольцо), star (звезда),
                                         ring-star (чередуется кольцо и звезда), random (случайные топологии)
         matrix_type - mixing-metropolis, mixing-laplacian, gossip-metropolis, gossip-laplacian
         n_graphs - через сколько чередуется кольцо и звезда для ring-star, количество случайных топологий при random
         plot_graps - рисовать ли графы
         max_iter - максимальное количество вызовов (None, если бесконечно)
+        seed_list - список сидов длины n_graphs для генерации случайных графов
         """
         self.n: int = n
         self.topology_type: str = topology_type
-        assert self.topology_type in ["full", "ring", "star", "ring-star", "random"]
+        assert self.topology_type in ["fully connected", "ring", "star", "ring-star", "random"]
         self.matrix_type: str = matrix_type
         assert self.matrix_type in ["mixing-metropolis", "mixing-laplacian", "gossip-metropolis",
                                     "gossip-laplacian"]
         self.n_graphs = n_graphs
         if self.topology_type == "ring-star" or self.topology_type == "random":
             assert (type(self.n_graphs) == int) and (self.n_graphs > 0)
+        self.seed_list = seed_list
+        if self.seed_list is None and self.topology_type == "random":
+            self.seed_list = np.arange(self.n_graphs)
         self.plot_graphs = plot_graphs
         self.max_iter = max_iter
         self.current_iter = 0
         self.__regime: bool = True
         self.chi = -1
         self.lambda_max = 1
+        self.norm = None
         self.matrices = self.get_matrices()
 
     def get_matrices(self) -> list[nx.Graph]:
         result: list[nx.Graph] = []
 
-        if self.topology_type == "full":
+        if self.topology_type == "fully connected":
             result = [nx.complete_graph(self.n)]
         if self.topology_type == "ring":
             result = [nx.cycle_graph(self.n)]
@@ -66,8 +71,8 @@ class Topologies:
         if self.topology_type == "ring-star":
             result = [nx.cycle_graph(self.n), nx.star_graph(self.n - 1)]
         if self.topology_type == "random":
-            for _ in range(self.n_graphs):
-                g = nx.gnp_random_graph(self.n, 0.5)
+            for i in range(self.n_graphs):
+                g = nx.gnp_random_graph(self.n, 0.5, seed=self.seed_list[i])
                 if not nx.is_connected(g):
                     g = nx.complement(g)
                     result.append(g)
@@ -105,6 +110,7 @@ class Topologies:
 
             if self.matrix_type.endswith("laplacian"):
                 L = nx.laplacian_matrix(G).todense()
+                self.norm = np.linalg.norm(L, ord=2)
                 self.lambda_max = np.linalg.eigvalsh(L)[-1]
                 W = np.eye(L.shape[0]) - L / self.lambda_max
 

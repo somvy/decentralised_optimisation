@@ -2,6 +2,7 @@ from typing import Any
 
 import torch
 from torch import tensor
+import numpy as np
 
 from decentralized.topologies import Topologies
 from methods.base import BaseDecentralizedMethod
@@ -30,7 +31,7 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
             x_next = torch.matmul(gossip_matrix, x.view(n, -1)).view(n, *d)
 
             layer_gradients = torch.stack([oracle_grads[layer_num] for oracle_grads in total_gradients])
-            x_next -= self.step_size * layer_gradients
+            x_next -= 1. / np.sqrt(k) * layer_gradients
             new_params_by_layer.append(x_next)
 
         for oracle_num, oracle in enumerate(self.oracles):

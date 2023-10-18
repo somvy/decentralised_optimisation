@@ -69,8 +69,8 @@ class BinarySVC(BaseOracle):
         return [self.w.detach(), self.b.detach()]
 
     def set_params(self, params):
-        self.w = params[0]
-        self.b = params[1]
+        self.w = params[0].clone()
+        self.b = params[1].clone()
         for _ in [self.w, self.b]:
             _.requires_grad = True
         
