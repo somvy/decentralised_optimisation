@@ -9,6 +9,13 @@ def sample_spherical(npoints, ndim, device, dtype):
     return torch.tensor(vec, device=device, dtype=dtype)
 
 
+def is_smoothing_needed(params, eps=1e-5):
+    for param in params:
+        if (torch.abs(param) < eps).any():
+            return True
+    return False
+
+
 class L1RegressionOracle:
     
     def __init__(self, X, y, device='cpu', W_init=None, b_init=None, regularization=1,
@@ -30,7 +37,7 @@ class L1RegressionOracle:
         self.W = W_init.clone().detach().requires_grad_(True).to(device)
         self.b = b_init.clone().detach().requires_grad_(True).to(device)
         self.loss = torch.nn.L1Loss(reduction="mean")
-        self.lipschitz = 1
+        self.lipschitz = torch.linalg.norm(torch.concat([X, torch.ones(X.shape[1])[None, :]], dim=0), ord=2)
         self.regularization = regularization
         self.dimension = 0
         params = self.get_params()
@@ -63,33 +70,36 @@ class L1RegressionOracle:
     def __randomized_subgrad(self) -> list[tensor]:
         if self.grad_type == "smoothed-two-point":
             params = self.get_params()
-            dimension = self.dimension
-            noise = sample_spherical(self.grad_batch_size, dimension, params[0].device, params[0].dtype)
-            grad = torch.zeros_like(noise[0])
-            for i in range(self.grad_batch_size):
-                current_noise = noise[i]
-                left_params = []
-                right_params = []
+            if is_smoothing_needed(params):
+                dimension = self.dimension
+                noise = sample_spherical(self.grad_batch_size, dimension, params[0].device, params[0].dtype)
+                grad = torch.zeros_like(noise[0])
+                for i in range(self.grad_batch_size):
+                    current_noise = noise[i]
+                    left_params = []
+                    right_params = []
+                    start = 0
+                    for param in params:
+                        size = np.prod(param.shape)
+                        left_params.append(param - self.gamma * current_noise[start:start + size].reshape(param.shape))
+                        right_params.append(param + self.gamma * current_noise[start:start + size].reshape(param.shape))
+                        start += size
+                    self.set_params(left_params)
+                    f_left = self.__call__()
+                    self.set_params(right_params)
+                    f_right = self.__call__()
+                    grad += dimension / self.gamma / 2 * (f_right - f_left) * current_noise
+                grad /= self.grad_batch_size
+                result = []
                 start = 0
                 for param in params:
                     size = np.prod(param.shape)
-                    left_params.append(param - self.gamma * current_noise[start:start + size].reshape(param.shape))
-                    right_params.append(param + self.gamma * current_noise[start:start + size].reshape(param.shape))
+                    result.append(grad[start:start + size].reshape(param.shape))
                     start += size
-                self.set_params(left_params)
-                f_left = self.__call__()
-                self.set_params(right_params)
-                f_right = self.__call__()
-                grad += dimension / self.gamma / 2 * (f_right - f_left) * current_noise
-            grad /= self.grad_batch_size
-            result = []
-            start = 0
-            for param in params:
-                size = np.prod(param.shape)
-                result.append(grad[start:start + size].reshape(param.shape))
-                start += size
-            self.set_params(params)
-            return result
+                self.set_params(params)
+                return result
+            else:
+                return self.__grad()
         
     def grad(self) -> list[tensor]:
         if self.grad_type == "grad":
