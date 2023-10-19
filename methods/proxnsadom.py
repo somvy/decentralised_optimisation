@@ -69,8 +69,8 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
         self.a = (1 + (1 + 4 * self.a ** 2) ** 0.5) / 2
         alpha = 1 / self.a
-        self.eta *= self.a
-        self.theta *= self.a
+        eta = self.eta * self.a
+        theta = self.theta * self.a
 
         # n x d
         x, y, z, xu, yu, zu, m = map(
@@ -79,16 +79,17 @@ class PROXNSADOM(BaseDecentralizedMethod):
         yl = alpha * y + (1 - alpha) * yu
         zl = alpha * z + (1 - alpha) * zu
         g_grad = self.grad_g(yl, zl)
-        gossip_nesterov = gossip_matrix @ (m - self.theta * g_grad)
+        gossip_nesterov = gossip_matrix @ (m - theta * g_grad)
         z_next = z + gossip_nesterov
-        m_next = m - self.theta * g_grad - gossip_nesterov
+        m_next = m - theta * g_grad - gossip_nesterov
 
-        x_next, y_next = self.inner_saddle.solve_saddle(x, y, yl, zl, self.eta, self.theta, self.grad_f)
+        x_next, y_next = self.inner_saddle.solve_saddle(x, y, yl, zl, eta, theta, self.grad_f)
         xnorm_diff = (x_next - x).norm()
         ynorm_diff = (y_next - y).norm()
         print("xnorm_diff", xnorm_diff, "ynorm_diff", ynorm_diff)
-        if xnorm_diff.isnan():
-            raise StopIteration("xnorm_diff is nan, stopping iteration")
+        print("consensus: ", torch.norm(x_next[0] - x_next[-1]))
+        if xnorm_diff.isnan() or xnorm_diff.isinf():
+            raise StopIteration("xnorm_diff is too low or high, stopping iteration")
         yu_next = yl + alpha * (y_next - y)
         zu_next = zl - self.gamma * gossip_matrix @ g_grad
 
@@ -102,6 +103,7 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
         for oracle_num, oracle in enumerate(self.oracles):
             oracle.set_params(self.x[oracle_num])
+        print(self.log())
 
     def grad_g(self, y, z):
         return 1 / self.r * (y + z)
@@ -164,7 +166,7 @@ class InnerProblemSolver:
         y = yk.clone()
         grad_x = lambda X, Y: 1 / eta * (X - xk) + grad_f(X) - Y
 
-        for _ in range(1000):
+        for k in range(1, 5001):
             y = yk - x * theta - self.gradG(yk_, zk_) * theta
             x = x - self.lr * grad_x(x, y)
         return x, y
