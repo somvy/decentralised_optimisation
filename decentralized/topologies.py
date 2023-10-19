@@ -49,7 +49,7 @@ class Topologies:
             assert (type(self.n_graphs) == int) and (self.n_graphs > 0)
         self.seed_list = seed_list
         if self.seed_list is None and self.topology_type == "random":
-            self.seed_list = np.arange(self.n_graphs)
+            self.seed_list = np.arange(self.n_graphs, dtype=int) + 42
         self.plot_graphs = plot_graphs
         self.max_iter = max_iter
         self.current_iter = 0
@@ -72,7 +72,7 @@ class Topologies:
             result = [nx.cycle_graph(self.n), nx.star_graph(self.n - 1)]
         if self.topology_type == "random":
             for i in range(self.n_graphs):
-                g = nx.gnp_random_graph(self.n, 0.5, seed=self.seed_list[i])
+                g = nx.gnp_random_graph(n=self.n, p=0.5, seed=int(self.seed_list[i]))
                 if not nx.is_connected(g):
                     g = nx.complement(g)
                     result.append(g)

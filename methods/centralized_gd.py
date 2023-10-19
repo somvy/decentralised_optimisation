@@ -16,7 +16,7 @@ class CentralizedGradientDescent(BaseDecentralizedMethod):
         self.step_size: float = stepsize
         self.max_iter: int = max_iter
 
-    def step(self):
+    def step(self, k=1):
         total_parameters: list[list[tensor]] = [oracle.get_params() for oracle in self.oracles]
         total_gradients: list[list[tensor]] = [oracle.grad() for oracle in self.oracles]
         layers_count: int = len(total_parameters[0])
@@ -26,7 +26,7 @@ class CentralizedGradientDescent(BaseDecentralizedMethod):
             x: tensor = torch.stack([oracle_params[layer_num] for oracle_params in total_parameters])
             layer_gradients = torch.stack([oracle_grads[layer_num] for oracle_grads in total_gradients])
             layer_gradients = layer_gradients.mean(axis=0)
-            x_next = x - self.step_size * layer_gradients
+            x_next = x - self.step_size / np.sqrt(k) * layer_gradients
             new_params_by_layer.append(x_next)
 
         for oracle_num, oracle in enumerate(self.oracles):
@@ -37,8 +37,8 @@ class CentralizedGradientDescent(BaseDecentralizedMethod):
     def run(self, log: bool = False):
         if log:
             self.logs.append(self.log())
-        for _ in range(self.max_iter):
-            self.step()
+        for i in range(self.max_iter):
+            self.step(i + 1)
             if log:
                 self.logs.append(self.log())
 
