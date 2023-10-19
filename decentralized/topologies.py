@@ -75,7 +75,7 @@ class Topologies:
                 g = nx.gnp_random_graph(n=self.n, p=0.5, seed=int(self.seed_list[i]))
                 if not nx.is_connected(g):
                     g = nx.complement(g)
-                    result.append(g)
+                result.append(g)
 
         if self.plot_graphs:
             self.__plot_graphs(result)
