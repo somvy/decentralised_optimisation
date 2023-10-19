@@ -53,7 +53,7 @@ def get_method(oracles, topology, reg, chi, saddle_lr):
     return PROXNSADOM(
         oracles=oracles,
         topology=topology,
-        max_iter=50,
+        max_iter=500,
         eta=1 / (64 * reg * chi ** 2),
         theta=reg / (16 * chi ** 2),
         gamma=reg / 2,
@@ -89,14 +89,13 @@ def grid_search(oracles, topology, reg):
 def run_single(oracles, topology, reg):
     chi = topology.chi
     print("topology chi :", chi)
-    method = get_method(oracles, topology, reg, chi, saddle_lr=5e-7)
-    print("running...")
+    method = get_method(oracles, topology, reg, chi, saddle_lr=5e-2)
+    print("running single...")
     method.run(log=True, disable_tqdm=False)
 
     filename = "proxnsadom_svm.svg"
-    save_plot(method.logs, filename)
+    save_plot(method.logs, filename, method_name="PROXNSADOM", task_name="svm")
     proxnsadom_plot(method.logs)
-
     # print_metrics(method.logs)
     print("logs saved to %s" % filename)
 
@@ -104,6 +103,7 @@ def run_single(oracles, topology, reg):
 def main():
     np.random.seed(0xCAFEBABE)
     num_nodes = 10
+    reg = 2e-1
     topology: Topologies = Topologies(n=num_nodes, topology_type="ring", matrix_type="gossip-laplacian")
 
     # X, y = libsvmdata.fetch_libsvm('abalone_scale')
@@ -111,7 +111,7 @@ def main():
     X = torch.Tensor(X.todense())
     y = torch.Tensor(y)
     oracles = get_oracles(X, y, num_nodes)
-    run_single(oracles, topology, reg=1)
+    run_single(oracles, topology, reg)
 
 
 if __name__ == "__main__":

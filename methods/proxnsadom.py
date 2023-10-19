@@ -106,6 +106,7 @@ class PROXNSADOM(BaseDecentralizedMethod):
         print(self.log())
 
     def grad_g(self, y, z):
+
         return 1 / self.r * (y + z)
 
     @staticmethod
@@ -166,7 +167,10 @@ class InnerProblemSolver:
         y = yk.clone()
         grad_x = lambda X, Y: 1 / eta * (X - xk) + grad_f(X) - Y
 
-        for k in range(1, 5001):
+        for k in range(1, 200):
             y = yk - x * theta - self.gradG(yk_, zk_) * theta
-            x = x - self.lr * grad_x(x, y)
+            x = x - self.lr / (k) * grad_x(x, y)
+        after_grad = grad_x(x, y)
+        print("inner problem gradient: norm %f, max %f" % (
+        after_grad.norm() / after_grad.numel(), after_grad.max()))
         return x, y
