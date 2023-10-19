@@ -9,8 +9,7 @@ from tqdm.auto import trange
 
 class PROXNSADOM(BaseDecentralizedMethod):
     def __init__(self, oracles, topology, max_iter,
-                 eta, theta, r,
-                 gamma):
+                 eta, theta, r, gamma, saddle_lr=5e-4):
         """
 
         :param oracles:
@@ -32,6 +31,7 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
         # oracles x layers x params
         self.x: list[list[Tensor]] = [oracle.get_params() for oracle in self.oracles]
+        self.xu: list[list[Tensor]] = deepcopy(self.x)
         self.y: list[list[Tensor]] = deepcopy(self.x)
         # y upper
         self.yu: list[list[Tensor]] = deepcopy(self.x)
@@ -42,7 +42,7 @@ class PROXNSADOM(BaseDecentralizedMethod):
         self.z: list[list[Tensor]] = [[torch.zeros_like(param) for param in oracles] for oracles in self.x]
         self.zu: list[list[Tensor]] = deepcopy(self.z)
         self.m: list[list[Tensor]] = deepcopy(self.z)
-        self.inner_saddle = InnerProblemSolver(r=r, lr=1e-3, q=3e-1)
+        self.inner_saddle = InnerProblemSolver(r=r, lr=saddle_lr)
 
     def grad_f(self, x: Tensor) -> Tensor:
         """
@@ -62,8 +62,10 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
         return self.to_vector_form(grad)
 
-    def step(self):
+    def step(self, k):
         gossip_matrix = torch.Tensor(next(self.topology))
+
+        prev_alpha = 1 / self.a if k != 1 else 1
 
         self.a = (1 + (1 + 4 * self.a ** 2) ** 0.5) / 2
         alpha = 1 / self.a
@@ -71,7 +73,9 @@ class PROXNSADOM(BaseDecentralizedMethod):
         self.theta *= self.a
 
         # n x d
-        x, y, z, yu, zu, m = map(self.to_vector_form, (self.x, self.y, self.z, self.yu, self.zu, self.m))
+        x, y, z, xu, yu, zu, m = map(
+            self.to_vector_form, (self.x, self.y, self.z, self.xu, self.yu, self.zu, self.m)
+        )
         yl = alpha * y + (1 - alpha) * yu
         zl = alpha * z + (1 - alpha) * zu
         g_grad = self.grad_g(yl, zl)
@@ -80,14 +84,24 @@ class PROXNSADOM(BaseDecentralizedMethod):
         m_next = m - self.theta * g_grad - gossip_nesterov
 
         x_next, y_next = self.inner_saddle.solve_saddle(x, y, yl, zl, self.eta, self.theta, self.grad_f)
+        xnorm_diff = (x_next - x).norm()
+        ynorm_diff = (y_next - y).norm()
+        print("xnorm_diff", xnorm_diff, "ynorm_diff", ynorm_diff)
+        if xnorm_diff.isnan():
+            raise StopIteration("xnorm_diff is nan, stopping iteration")
         yu_next = yl + alpha * (y_next - y)
         zu_next = zl - self.gamma * gossip_matrix @ g_grad
 
         #     write back to self
         # усреднить по x
-        self.x, self.y, self.z, self.yu, self.zu, self.m = map(
-            self.to_list_form, (x_next, y_next, z_next, yu_next, zu_next, m_next)
+
+        xu_next = alpha ** 2 * (xu / prev_alpha + self.a * x_next)
+        self.x, self.y, self.z, self.xu, self.yu, self.zu, self.m = map(
+            self.to_list_form, (x_next, y_next, z_next, xu_next, yu_next, zu_next, m_next)
         )
+
+        for oracle_num, oracle in enumerate(self.oracles):
+            oracle.set_params(self.x[oracle_num])
 
     def grad_g(self, y, z):
         return 1 / self.r * (y + z)
@@ -111,8 +125,8 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
     def run(self, log: bool = False, disable_tqdm=True):
         loop = trange(1, self.max_iter + 1, disable=disable_tqdm)
-        for _ in loop:
-            self.step()
+        for k in loop:
+            self.step(k)
             if log:
                 self.logs.append(self.log())
 
@@ -131,9 +145,8 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
 class InnerProblemSolver:
 
-    def __init__(self, r, q, lr):
+    def __init__(self, r, lr):
         self.r = r
-        self.q = q
         self.lr = lr
 
     def G(self, y, z):
@@ -149,11 +162,9 @@ class InnerProblemSolver:
     def solve_saddle(self, xk, yk, yk_, zk_, eta, theta, grad_f):
         x = xk.clone()
         y = yk.clone()
-        grad_y = lambda X, Y: - X - self.gradG(yk_, zk_) - 1 / theta * (Y - yk)
         grad_x = lambda X, Y: 1 / eta * (X - xk) + grad_f(X) - Y
 
         for _ in range(1000):
-            y_tmp = y + self.lr * grad_y(x, y)
-            x = x - self.lr * grad_x(x, y_tmp)
-            y = y + self.q * (y_tmp - y)
+            y = yk - x * theta - self.gradG(yk_, zk_) * theta
+            x = x - self.lr * grad_x(x, y)
         return x, y

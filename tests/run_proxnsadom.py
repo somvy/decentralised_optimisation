@@ -44,7 +44,7 @@ def run():
     np.random.seed(0xCAFEBABE)
     num_nodes = 10
 
-    topology: Topologies = Topologies(n=num_nodes, topology_type="fully connected", matrix_type="gossip-metropolis")
+    topology: Topologies = Topologies(n=num_nodes, topology_type="ring", matrix_type="gossip-metropolis")
 
     X, y = libsvmdata.fetch_libsvm('abalone_scale')
     X = torch.Tensor(X)
@@ -69,6 +69,7 @@ def run():
     )
     print("running...")
     method.run(log=True, disable_tqdm=False)
+
     save_plot(method.logs, "proxnsadom_svm.svg")
     proxnsadom_plot(method.logs)
     print("\n".join([str(log) for log in method.logs]))
