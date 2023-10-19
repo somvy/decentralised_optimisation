@@ -58,6 +58,25 @@ def run():
     print("topology chi :", chi)
     eps = 1e-5
 
+    stats = []
+    saddle_lr_candidates = [1e-5, 3e-6, 5e-5, 7e-5, 1e-4, 3e-4, 5e-4, 7e-4, 1e-3]
+
+    for saddle_lr in saddle_lr_candidates:
+        method = PROXNSADOM(
+            oracles=oracles,
+            topology=topology,
+            max_iter=10,
+            eta=1 / (64 * reg * chi ** 2),
+            theta=reg / (16 * chi ** 2),
+            gamma=reg / 2,
+            r=reg,
+            saddle_lr=saddle_lr
+        )
+        print("running...")
+        method.run(log=True, disable_tqdm=False)
+        loss = methods.log()["loss"]
+        stats.append(loss)
+    best_saddle_lr = saddle_lr_candidates[torch.argmin(torch.FloatTensor(stats))]
     method = PROXNSADOM(
         oracles=oracles,
         topology=topology,
@@ -65,7 +84,8 @@ def run():
         eta=1 / (64 * reg * chi ** 2),
         theta=reg / (16 * chi ** 2),
         gamma=reg / 2,
-        r=reg
+        r=reg,
+        saddle_lr=best_saddle_lr
     )
     print("running...")
     method.run(log=True, disable_tqdm=False)
