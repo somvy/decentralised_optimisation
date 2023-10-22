@@ -3,13 +3,16 @@ from typing import Callable, Any
 import torch
 from torch import Tensor
 from copy import deepcopy
+
+from wandb.sdk.wandb_run import Run
+
 from methods.base import BaseDecentralizedMethod
 from tqdm.auto import trange
 
 
 class PROXNSADOM(BaseDecentralizedMethod):
     def __init__(self, oracles, topology, max_iter,
-                 eta, theta, r, gamma, saddle_lr=5e-4):
+                 eta, theta, r, gamma, wandbrun: Run, saddle_lr=5e-4):
         """
 
         :param oracles:
@@ -28,6 +31,9 @@ class PROXNSADOM(BaseDecentralizedMethod):
         self.theta = theta
         self.gamma = gamma
         self.r = r
+        self.saddle_lr = saddle_lr
+        self.wandb = wandbrun
+        self.step_num = 0
 
         # oracles x layers x params
         self.x: list[list[Tensor]] = [oracle.get_params() for oracle in self.oracles]
@@ -42,7 +48,6 @@ class PROXNSADOM(BaseDecentralizedMethod):
         self.z: list[list[Tensor]] = [[torch.zeros_like(param) for param in oracles] for oracles in self.x]
         self.zu: list[list[Tensor]] = deepcopy(self.z)
         self.m: list[list[Tensor]] = deepcopy(self.z)
-        self.inner_saddle = InnerProblemSolver(r=r, lr=saddle_lr)
 
     def grad_f(self, x: Tensor) -> Tensor:
         """
@@ -62,10 +67,10 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
         return self.to_vector_form(grad)
 
-    def step(self, k):
+    def step(self):
         gossip_matrix = torch.Tensor(next(self.topology))
 
-        prev_alpha = 1 / self.a if k != 1 else 1
+        prev_alpha = 1 / self.a if self.step_num != 1 else 1
 
         self.a = (1 + (1 + 4 * self.a ** 2) ** 0.5) / 2
         alpha = 1 / self.a
@@ -83,17 +88,24 @@ class PROXNSADOM(BaseDecentralizedMethod):
         z_next = z + gossip_nesterov
         m_next = m - theta * g_grad - gossip_nesterov
 
-        x_next, y_next = self.inner_saddle.solve_saddle(x, y, yl, zl, eta, theta, self.grad_f)
+        x_next, y_next = self.solve_saddle(x, y, yl, zl, eta, theta)
         xnorm_diff = (x_next - x).norm()
         ynorm_diff = (y_next - y).norm()
-        print("xnorm_diff", xnorm_diff, "ynorm_diff", ynorm_diff)
-        print("consensus: ", torch.norm(x_next[0] - x_next[-1]))
+        step_logs = {
+            "xnorm_diff": xnorm_diff,
+            "ynorm_diff": ynorm_diff,
+            "consensus: ": torch.norm(x_next[0] - x_next[-1])
+        }
+        if self.wandb:
+            self.wandb.log(step_logs, step=self.step_num)
+        else:
+            print(step_logs)
+
         if xnorm_diff.isnan() or xnorm_diff.isinf():
             raise StopIteration("xnorm_diff is too low or high, stopping iteration")
         yu_next = yl + alpha * (y_next - y)
         zu_next = zl - self.gamma * gossip_matrix @ g_grad
 
-        #     write back to self
         # усреднить по x
 
         xu_next = alpha ** 2 * (xu / prev_alpha + self.a * x_next)
@@ -103,7 +115,6 @@ class PROXNSADOM(BaseDecentralizedMethod):
 
         for oracle_num, oracle in enumerate(self.oracles):
             oracle.set_params(self.x[oracle_num])
-        print(self.log())
 
     def grad_g(self, y, z):
 
@@ -129,12 +140,16 @@ class PROXNSADOM(BaseDecentralizedMethod):
     def run(self, log: bool = False, disable_tqdm=True):
         loop = trange(1, self.max_iter + 1, disable=disable_tqdm)
         for k in loop:
-            self.step(k)
+            self.step_num = k
+            self.step()
             if log:
-                self.logs.append(self.log())
+                log = self.log()
+                self.logs.append(log)
+                if self.wandb:
+                    self.wandb.log(log, step=self.step_num)
 
     def log(self) -> dict[str, Any]:
-        losses = [oracle() for oracle in self.oracles]
+        losses = [float(oracle()) for oracle in self.oracles]
 
         return {
             "loss": sum(losses) / len(losses),
@@ -145,32 +160,29 @@ class PROXNSADOM(BaseDecentralizedMethod):
             "a": self.a
         }
 
-
-class InnerProblemSolver:
-
-    def __init__(self, r, lr):
-        self.r = r
-        self.lr = lr
-
     def G(self, y, z):
         return 1 / (2 * self.r) * (y + z).norm() ** 2
 
     def gradG(self, y, z):
         return 1 / self.r * (y + z)
 
-    def __call__(self, x, y, xk, yk, yk_, zk_, eta, theta, f):
+    def inner_saddle(self, x, y, xk, yk, yk_, zk_, eta, theta, f):
         return 1 / (2 * eta) * (x - xk).norm() ** 2 + f(x) - x @ y - (self.gradG(yk_, zk_) @ y) - 1 / (
                 2 * theta) * (y - yk).norm() ** 2
 
-    def solve_saddle(self, xk, yk, yk_, zk_, eta, theta, grad_f):
+    def solve_saddle(self, xk, yk, yk_, zk_, eta, theta):
         x = xk.clone()
         y = yk.clone()
-        grad_x = lambda X, Y: 1 / eta * (X - xk) + grad_f(X) - Y
+        grad_x = lambda X, Y: 1 / eta * (X - xk) + self.grad_f(X) - Y
 
-        for k in range(1, 200):
+        for k in range(1, 800):
             y = yk - x * theta - self.gradG(yk_, zk_) * theta
-            x = x - self.lr / (k) * grad_x(x, y)
+            x = x - self.saddle_lr / (k ** (1 / 2)) * grad_x(x, y)
         after_grad = grad_x(x, y)
-        print("inner problem gradient: norm %f, max %f" % (
-        after_grad.norm() / after_grad.numel(), after_grad.max()))
+        inner_saddle_log = {
+            "inner saddle grad norm": after_grad.norm() / after_grad.numel(),
+            "inner saggle grad max": after_grad.max()
+        }
+        if self.wandb:
+            self.wandb.log(inner_saddle_log, step=self.step_num)
         return x, y

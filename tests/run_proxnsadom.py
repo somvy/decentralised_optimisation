@@ -1,33 +1,14 @@
-from collections import defaultdict
-from typing import Any
+import wandb
+from wandb.wandb_run import Run
 
 from methods.proxnsadom import PROXNSADOM
 import numpy as np
 from decentralized.topologies import Topologies
-from oracles.l1_regression_oracle import L1RegressionOracle
-from oracles.binary_svc_oracle import BinarySVC
+
 import torch
 from utils import print_metrics, save_plot
-import libsvmdata
+from oracles.main import get_mnist_oracles
 import matplotlib.pyplot as plt
-
-
-def get_oracles(X, y, n):
-    oracles = []
-    start = 0
-    step = X.shape[0] // n
-    dim = X.shape[1]
-    # w_init = torch.zeros(dim, 1, dtype=X.dtype) / (dim ** 0.5)
-    # b_init = torch.zeros(1, 1, dtype=X.dtype)
-
-    for _ in range(n):
-        # oracle = L1RegressionOracle(X[start:start + step], y[start:start + step])
-        oracle = BinarySVC(X[start:start + step], y[start:start + step],
-                           # w_init=w_init, b_init=b_init
-                           )
-        oracles.append(oracle)
-        start += step
-    return oracles
 
 
 def proxnsadom_plot(logs: list[dict[str, float]]):
@@ -49,7 +30,7 @@ def proxnsadom_plot(logs: list[dict[str, float]]):
     fig.savefig("proxnsadom_hyper.svg")
 
 
-def get_method(oracles, topology, reg, chi, saddle_lr):
+def get_method(oracles, topology, reg, chi, wandbrun: Run, saddle_lr):
     return PROXNSADOM(
         oracles=oracles,
         topology=topology,
@@ -58,6 +39,7 @@ def get_method(oracles, topology, reg, chi, saddle_lr):
         theta=reg / (16 * chi ** 2),
         gamma=reg / 2,
         r=reg,
+        wandbrun=wandbrun,
         saddle_lr=saddle_lr
     )
 
@@ -86,32 +68,35 @@ def grid_search(oracles, topology, reg):
     print("### best saddle lr:", best_saddle_lr)
 
 
-def run_single(oracles, topology, reg):
+def run_single(oracles, topology, reg, run: Run = None):
     chi = topology.chi
-    print("topology chi :", chi)
-    method = get_method(oracles, topology, reg, chi, saddle_lr=5e-2)
-    print("running single...")
-    method.run(log=True, disable_tqdm=False)
+    saddle_lr = 5e-2
+    method = get_method(oracles, topology, reg, chi, wandbrun=run, saddle_lr=saddle_lr)
 
-    filename = "proxnsadom_svm.svg"
-    save_plot(method.logs, filename, method_name="PROXNSADOM", task_name="svm")
-    proxnsadom_plot(method.logs)
-    # print_metrics(method.logs)
-    print("logs saved to %s" % filename)
+    try:
+        method.run(log=True, disable_tqdm=False)
+    finally:
+        filename = "proxnsadom_svm.svg"
+        save_plot(method.logs, filename, method_name="PROXNSADOM", task_name="svm")
+        proxnsadom_plot(method.logs)
+        print("logs saved to %s" % filename)
 
 
 def main():
     np.random.seed(0xCAFEBABE)
     num_nodes = 10
     reg = 2e-1
-    topology: Topologies = Topologies(n=num_nodes, topology_type="ring", matrix_type="gossip-laplacian")
-
-    # X, y = libsvmdata.fetch_libsvm('abalone_scale')
-    X, y = libsvmdata.fetch_libsvm('a1a')
-    X = torch.Tensor(X.todense())
-    y = torch.Tensor(y)
-    oracles = get_oracles(X, y, num_nodes)
-    run_single(oracles, topology, reg)
+    run = wandb.init(project="decentralized opt",
+                     config={
+                         "task": "svm",
+                         "method": "proxnsadom",
+                         "reg": reg,
+                         "num_nodes": num_nodes
+                     })
+    topology: Topologies = Topologies(n=num_nodes, topology_type="fully connected",
+                                      matrix_type="gossip-laplacian")
+    oracles = get_mnist_oracles(num_nodes)
+    run_single(oracles, topology, reg, run=run)
 
 
 if __name__ == "__main__":

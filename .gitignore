@@ -8,3 +8,5 @@ test/MNIST
 .ipynb_checkpoints/
 img/
 for_img/
+wandb
+logs
