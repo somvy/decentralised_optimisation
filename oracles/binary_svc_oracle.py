@@ -54,7 +54,7 @@ class BinarySVC(BaseOracle):
     def __f(self):
         margin = (1 - self.y * (self.X @ self.w - self.b))
         margin = torch.cat([margin, torch.zeros(self.X.shape[0], 1)], axis=1).max(axis=1)[0]
-        return (margin + self.regularization / 2 * (self.w.T @ self.w)).mean()
+        return margin.mean() + self.regularization / 2 * (self.w.T @ self.w)
 
     def __call__(self):
         with torch.no_grad():
