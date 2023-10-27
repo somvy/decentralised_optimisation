@@ -25,13 +25,13 @@ class ZOSADOM(BaseDecentralizedMethod):
         self.__calculate_params()
     
     def __calculate_params(self):
-        L = 1#np.sqrt(self.oracles[0].dimension) * self.oracles[0].lipschitz / self.oracles[0].gamma
+        L = np.sqrt(self.oracles[0].dimension) * self.oracles[0].lipschitz / self.oracles[0].gamma
         mu = self.oracles[0].regularization
         chi = self.topology.chi
         #print(chi)
         self.params = {}
         self.params['zeta'] = 0.5
-        self.params['beta'] = 20#1. / (2 * L)
+        self.params['beta'] = 1. / (2 * L)
         self.params['nu'] = mu / 2
         self.params['alpha'] = mu / 4
         self.params['tau2'] = np.sqrt(mu / L)
