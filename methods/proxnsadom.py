@@ -176,8 +176,9 @@ class PROXNSADOM(BaseDecentralizedMethod):
         grad_x = lambda X, Y: 1 / eta * (X - xk) + self.grad_f(X) - Y
 
         for k in range(1, 800):
-            y = yk - x * theta - self.gradG(yk_, zk_) * theta
-            x = x - self.saddle_lr / (k ** (1 / 2)) * grad_x(x, y)
+            x = x - self.saddle_lr / (k ** (1 / 2)) * grad_x(x, yk)    
+        y = yk - x * theta - self.gradG(yk_, zk_) * theta
+        
         after_grad = grad_x(x, y)
         inner_saddle_log = {
             "inner saddle grad norm": after_grad.norm() / after_grad.numel(),
