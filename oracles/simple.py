@@ -1,6 +1,5 @@
 from oracles.base import BaseOracle
 from torch import tensor
-import torch
 
 
 class QuadraticOracle(BaseOracle):

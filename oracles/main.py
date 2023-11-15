@@ -1,3 +1,5 @@
+import numpy as np
+
 from oracles.mnist_mlp_oracle import MNISTMLP, MLP
 from torchvision.datasets import MNIST
 from sklearn.model_selection import KFold
@@ -10,9 +12,10 @@ from torchvision import transforms
 import torch
 
 
-def get_smv_oracles(n):
+def get_svm_oracles(n):
     X, y = libsvmdata.fetch_libsvm('a1a')
-    X = torch.Tensor(X.todense())
+    X, y = libsvmdata.fetch_libsvm('gisette')
+    X = torch.Tensor(X if isinstance(X, np.ndarray) else X.todense())
     y = torch.Tensor(y)
     oracles = []
     start = 0
@@ -41,7 +44,7 @@ def get_l1_oracles(n):
 
 
 def get_mnist_oracles(n):
-    train_dataset = MNIST(".", download=True, transform=transforms.ToTensor(), train=True)
+    train_dataset = MNIST("data", download=True, transform=transforms.ToTensor(), train=True)
     skf = KFold(n_splits=n, shuffle=False)
     init_model = MLP()
 
@@ -52,3 +55,15 @@ def get_mnist_oracles(n):
         oracles.append(oracle)
 
     return oracles
+
+
+def get_oracles(task, num_nodes):
+    match task:
+        case "mnist":
+            return get_mnist_oracles(num_nodes)
+        case "svm":
+            return get_svm_oracles(num_nodes)
+        case "l1":
+            return get_l1_oracles(num_nodes)
+        case _:
+            raise ValueError("task must be one of: mnist, smv, l1")
