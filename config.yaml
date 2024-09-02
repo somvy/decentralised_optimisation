@@ -1,0 +1,17 @@
+WANDB_PROJECT_NAME: decentralized opt
+
+# available methods: centralized gd, decentralized gd, decentralized cs (communication sliding), single gd, proxnsadom (our method)
+method_name: zosadom
+# available tasks: mnist, svm, l1
+task: svm
+# number of nodes in the network
+num_nodes: 5
+# regularization parameter
+reg: 1e-1
+# maximum number of iterations
+max_iter: 2000
+# number of iterations for saddle point optimization
+saddle_iters: 1000
+saddle_lr: 5e-4
+# available topologies: ring, star, fully connected
+topology_type: ring
