@@ -19,7 +19,7 @@ To reproduce them follow the instructions:
 ## clone the repo, create the virtual env and install the libraries
 (i prefer uv, but feel free to use your favorite package manager)
 
-        git clone https://github.com/somvy/siriusopt2023 && cd siriusopt2023
+        git clone https://github.com/somvy/decentralised_optimisation && cd decentralised_optimisation
         python -m pip install uv 
         uv venv && . .venv/bin/activate
         uv pip install -r requirements.txt
