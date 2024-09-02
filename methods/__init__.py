@@ -2,6 +2,6 @@ from methods.base import BaseDecentralizedMethod
 from methods.proxnsadom import PROXNSADOM
 from methods.centralized_gd import CentralizedGradientDescent
 from methods.decentralized_gd import DecentralizedGradientDescent
-from methods.decentralized_gd import DecentralizedGradientDescent
+from methods.decentralized_cs import DecentralizedCommunicationSliding
 from methods.single_gd import SingleGD
-
+from methods.ZOSADOM import ZOSADOM

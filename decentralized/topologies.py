@@ -7,46 +7,63 @@ import matplotlib.pyplot as plt
 
 class Topologies:
     """
-    Генератор топологий для распределенной оптимизации, представляющий собой генератор, который при каждом вызове next 
-    возвращает смешивающую матрицу текущей конфигурации сети. Таким образом можно использовать генератор в следующем варианте:
-    
-    Возвращаемый тип: np.array, dtype=np.float64
-    
+    Topology generator for distributed optimization, representing a generator that returns the mixing matrix of the current network configuration at each next() call. Thus, the generator can be used in the following way:
+
+    Return type: np.array, dtype=np.float64
+
     for current_matrix in Topologies(params):
         .....
-    
-    Поддерживаются следующие топологии:
-        1) Полный граф
-        2) Кольцо
-        3) Звезда
-        4) Чередующиеся кольца и звезды (сменяются через заданное число итераций)
-        5) Зацикленная последовательность из заданного количества связных случайных графов
-    
-    Также поддерживается возможность ограничить количество итераций.
-    
+
+    The following topologies are supported:
+        1) Fully connected graph
+        2) Ring
+        3) Star
+        4) Alternating rings and stars (changing after a specified number of iterations)
+        5) Cyclic sequence of a given number of connected random graphs
+
+    It also supports the ability to limit the number of iterations.
+
     """
 
-    def __init__(self, n: int, topology_type: str, matrix_type: str, n_graphs: int = None,
-                 plot_graphs: bool = False, max_iter: int = None, seed_list = None):
+    def __init__(
+        self,
+        n: int,
+        topology_type: str,
+        matrix_type: str,
+        n_graphs: int = None,
+        plot_graphs: bool = False,
+        max_iter: int = None,
+        seed_list=None,
+    ):
         """
-        n - количество вершин/воркеров
-        topology_type - вид топологии: fully connected (полный граф), ring (кольцо), star (звезда),
-                                        ring-star (чередуется кольцо и звезда), random (случайные топологии)
+        n - number of vertices/workers
+        topology_type - type of topology: fully connected (complete graph), ring, star,
+                                        ring-star (alternating between ring and star), random (random topologies)
         matrix_type - mixing-metropolis, mixing-laplacian, gossip-metropolis, gossip-laplacian
-        n_graphs - через сколько чередуется кольцо и звезда для ring-star, количество случайных топологий при random
-        plot_graps - рисовать ли графы
-        max_iter - максимальное количество вызовов (None, если бесконечно)
-        seed_list - список сидов длины n_graphs для генерации случайных графов
+        n_graphs - how often to alternate between ring and star for ring-star, number of random topologies for random
+        plot_graphs - whether to plot the graphs
+        max_iter - maximum number of calls (None if infinite)
+        seed_list - list of seeds of length n_graphs for generating random graphs
         """
         self.n: int = n
         self.topology_type: str = topology_type
-        assert self.topology_type in ["fully connected", "ring", "star", "ring-star", "random"]
+        assert self.topology_type in [
+            "fully connected",
+            "ring",
+            "star",
+            "ring-star",
+            "random",
+        ]
         self.matrix_type: str = matrix_type
-        assert self.matrix_type in ["mixing-metropolis", "mixing-laplacian", "gossip-metropolis",
-                                    "gossip-laplacian"]
+        assert self.matrix_type in [
+            "mixing-metropolis",
+            "mixing-laplacian",
+            "gossip-metropolis",
+            "gossip-laplacian",
+        ]
         self.n_graphs = n_graphs
         if self.topology_type == "ring-star" or self.topology_type == "random":
-            assert (type(self.n_graphs) == int) and (self.n_graphs > 0)
+            assert isinstance(self.n_graphs, int) and self.n_graphs > 0
         self.seed_list = seed_list
         if self.seed_list is None and self.topology_type == "random":
             self.seed_list = np.arange(self.n_graphs, dtype=int) + 42
@@ -102,10 +119,10 @@ class Topologies:
         for G in graphs:
             if self.matrix_type.endswith("metropolis"):
                 W = np.zeros((self.n, self.n))
-                for (i, j) in G.edges:
+                for i, j in G.edges:
                     if i != j:
-                        W[i, j] = 1. / (max(G.degree[i], G.degree[j]) + 1)
-                        W[j, i] = 1. / (max(G.degree[i], G.degree[j]) + 1)
+                        W[i, j] = 1.0 / (max(G.degree[i], G.degree[j]) + 1)
+                        W[j, i] = 1.0 / (max(G.degree[i], G.degree[j]) + 1)
                 W += np.diag(np.ones(W.shape[0]) - W.sum(axis=1))
 
             if self.matrix_type.endswith("laplacian"):
@@ -119,10 +136,12 @@ class Topologies:
             assert np.allclose(W, W.T)
 
             lambda2 = np.linalg.eigvalsh(W)
-            lambda2 = lambda2[:lambda2.shape[0] - 1]
+            lambda2 = lambda2[: lambda2.shape[0] - 1]
             lambda2 = lambda2[lambda2 < 1][-1]
             assert lambda2 < 1
-            self.chi = max(self.chi, 1. / (1 - lambda2))  # eq to 1. / \lambda_min+ for gossip
+            self.chi = max(
+                self.chi, 1.0 / (1 - lambda2)
+            )  # eq to 1. / \lambda_min+ for gossip
 
             if self.matrix_type.startswith("gossip"):  # gossip matrices
                 W = np.eye(W.shape[0]) - W
@@ -136,10 +155,14 @@ class Topologies:
         fig, axes = plt.subplots(nrows=len(graphs))
         for i in range(len(graphs)):
             if len(graphs) == 1:
-                nx.draw_networkx_edges(graphs[i],
-                                       nx.rescale_layout_dict(nx.circular_layout(graphs[i]), 10),
-                                       ax=axes)
+                nx.draw_networkx_edges(
+                    graphs[i],
+                    nx.rescale_layout_dict(nx.circular_layout(graphs[i]), 10),
+                    ax=axes,
+                )
             else:
-                nx.draw_networkx_edges(graphs[i],
-                                       nx.rescale_layout_dict(nx.circular_layout(graphs[i]), 10),
-                                       ax=axes[i])
+                nx.draw_networkx_edges(
+                    graphs[i],
+                    nx.rescale_layout_dict(nx.circular_layout(graphs[i]), 10),
+                    ax=axes[i],
+                )

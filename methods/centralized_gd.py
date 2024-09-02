@@ -9,8 +9,14 @@ from wandb.sdk.wandb_run import Run
 
 
 class CentralizedGradientDescent(BaseDecentralizedMethod):
-    def __init__(self, oracles: list[BaseOracle], topology: Topologies, stepsize: float,
-                 max_iter: int, wandbrun: Run):
+    def __init__(
+        self,
+        oracles: list[BaseOracle],
+        topology: Topologies,
+        stepsize: float,
+        max_iter: int,
+        wandbrun: Run,
+    ):
         super().__init__(oracles, topology, wandbrun)
         self.step_size: float = stepsize
         self.max_iter: int = max_iter
@@ -18,15 +24,17 @@ class CentralizedGradientDescent(BaseDecentralizedMethod):
 
     def step(self):
         x: Tensor = self.to_vector_form(self.x)
-        grad: Tensor = self.to_vector_form([oracle.grad() for oracle in self.oracles]).mean(dim=0)
+        grad: Tensor = self.to_vector_form(
+            [oracle.grad() for oracle in self.oracles]
+        ).mean(dim=0)
         x_next: Tensor = x - self.step_size * grad
         self.wandb.log(
             {
                 "grad norm": grad.norm(),
                 "grad max": grad.mean().max(),
-                "x diff": (x_next - x).norm()
+                "x diff": (x_next - x).norm(),
             },
-            step=self.step_num
+            step=self.step_num,
         )
 
         self.x = self.to_list_form(x_next)
@@ -35,6 +43,4 @@ class CentralizedGradientDescent(BaseDecentralizedMethod):
 
     def log(self) -> dict[str, Any]:
         losses = [oracle() for oracle in self.oracles]
-        return {
-            "loss": sum(losses) / len(losses)
-        }
+        return {"loss": sum(losses) / len(losses)}

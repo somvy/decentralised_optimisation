@@ -1,8 +1,15 @@
 import wandb
-from methods import PROXNSADOM, CentralizedGradientDescent, SingleGD, DecentralizedGradientDescent
-
+import hydra
+from methods import (
+    PROXNSADOM,
+    CentralizedGradientDescent,
+    SingleGD,
+    DecentralizedGradientDescent,
+    DecentralizedCommunicationSliding,
+    ZOSADOM,
+)
+from omegaconf import DictConfig
 from decentralized.topologies import Topologies
-import config
 import torch
 from oracles.main import get_oracles
 
@@ -10,11 +17,29 @@ from oracles.main import get_oracles
 def grid_search(method: PROXNSADOM):
     stats = []
     saddle_lr_candidates: list[float] = [
-        1e-8, 5e-8, 1e-7, 5e-7, 1e-6,
-        5e-6, 1e-5, 3e-6, 5e-5, 7e-5,
-        1e-4, 3e-4, 5e-4, 7e-4, 1e-3,
-        3e-3, 5e-3, 7e-3, 1e-2, 3e-2,
-        5e-2, 7e-2, 1e-1
+        1e-8,
+        5e-8,
+        1e-7,
+        5e-7,
+        1e-6,
+        5e-6,
+        1e-5,
+        3e-6,
+        5e-5,
+        7e-5,
+        1e-4,
+        3e-4,
+        5e-4,
+        7e-4,
+        1e-3,
+        3e-3,
+        5e-3,
+        7e-3,
+        1e-2,
+        3e-2,
+        5e-2,
+        7e-2,
+        1e-1,
     ]
 
     for saddle_lr in saddle_lr_candidates:
@@ -32,72 +57,79 @@ def grid_search(method: PROXNSADOM):
     print("### best saddle lr:", best_saddle_lr)
 
 
-def main():
-    num_nodes = 5
-    reg = 1e-1
-    max_iter = 200000
-    saddle_iters = 1000
-    saddle_lr = 5e-4
-    task = "mnist"
-    topology_type = "fully connected"
-    method_name = "proxnsadom"
-
+@hydra.main(version_base=None, config_path=".", config_name="config")
+def main(cfg: DictConfig):
     wandbrun = wandb.init(
-        project=config.WANDB_PROJECT_NAME,
+        project=cfg.WANDB_PROJECT_NAME,
         config={
-            "task": task,
-            "topology": topology_type,
-            "method": method_name,
-            "reg": reg,
-            "num_nodes": num_nodes
-        })
-
-    matrix_type = "mixing-laplacian" if method_name in (
-        "centralized gd", "decentralized gd") else "gossip-laplacian"
-    topology: Topologies = Topologies(
-        n=num_nodes,
-        topology_type=topology_type,
-        matrix_type=matrix_type
+            "task": cfg.task,
+            "topology": cfg.topology_type,
+            "method": cfg.method_name,
+            "reg": cfg.reg,
+            "num_nodes": cfg.num_nodes,
+        },
     )
 
-    oracles = get_oracles(task, num_nodes)
+    matrix_type = (
+        "mixing-laplacian"
+        if cfg.method_name in ("centralized gd", "decentralized gd")
+        else "gossip-laplacian"
+    )
+    topology: Topologies = Topologies(
+        n=cfg.num_nodes, topology_type=cfg.topology_type, matrix_type=matrix_type
+    )
 
-    match method_name:
+    oracles = get_oracles(cfg.task, cfg.num_nodes)
+
+    match cfg.method_name:
         case "proxnsadom":
             method = PROXNSADOM(
                 oracles=oracles,
                 topology=topology,
-                max_iter=max_iter,
-                reg=reg,
+                max_iter=cfg.max_iter,
+                reg=cfg.reg,
                 wandbrun=wandbrun,
-                saddle_iters=saddle_iters,
-                saddle_lr=saddle_lr
+                saddle_iters=cfg.saddle_iters,
+                saddle_lr=cfg.saddle_lr,
             )
         case "centralized gd":
             method = CentralizedGradientDescent(
                 oracles=oracles,
                 topology=topology,
-                max_iter=max_iter,
+                    max_iter=cfg.max_iter,
                 stepsize=1e-3,
-                wandbrun=wandbrun
+                wandbrun=wandbrun,
             )
         case "decentralized gd":
             method = DecentralizedGradientDescent(
                 oracles=oracles,
                 topology=topology,
-                max_iter=max_iter,
+                max_iter=cfg.max_iter,
                 stepsize=1e-3,
                 wandbrun=wandbrun,
             )
         case "single gd":
             method = SingleGD(
-                oracle=oracles[0],
+                    oracle=oracles[0], wandbrun=wandbrun, max_iter=cfg.max_iter, lr=1e-3
+            )
+        case "decentralized cs":
+            method = DecentralizedCommunicationSliding(
+                oracles=oracles,
+                topology=topology,
+                max_iter=cfg.max_iter,
                 wandbrun=wandbrun,
-                max_iter=max_iter,
-                lr=1e-3
+            )
+        case "zosadom":
+            method = ZOSADOM(
+                oracles=oracles,
+                topology=topology,
+                max_iter=cfg.max_iter,
+                wandbrun=wandbrun,
             )
         case _:
-            raise ValueError("No such method!")
+            raise ValueError(
+                "No such method!, enter one of the following: proxnsadom, centralized gd, decentralized gd, single gd"
+            )
 
     method.run(log=True, disable_tqdm=False)
 

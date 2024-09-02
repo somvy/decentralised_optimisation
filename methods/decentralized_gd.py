@@ -11,35 +11,39 @@ from oracles.base import BaseOracle
 
 class DecentralizedGradientDescent(BaseDecentralizedMethod):
     def __init__(
-            self,
-            oracles: list[BaseOracle],
-            topology: Topologies,
-            wandbrun: Run,
-            stepsize: float,
-            max_iter: int
+        self,
+        oracles: list[BaseOracle],
+        topology: Topologies,
+        wandbrun: Run,
+        stepsize: float,
+        max_iter: int,
     ):
         assert topology.matrix_type.startswith(
-            "mixing"), "Decentralized GD works with mixing matrices only!"
+            "mixing"
+        ), "Decentralized GD works with mixing matrices only!"
         super().__init__(oracles, topology, wandbrun)
         self.step_size: float = stepsize
         self.max_iter: int = max_iter
 
     def step(self, k: int = 1):
-        x: Tensor = self.to_vector_form([oracle.get_params() for oracle in self.oracles])
+        x: Tensor = self.to_vector_form(
+            [oracle.get_params() for oracle in self.oracles]
+        )
         grad: Tensor = self.to_vector_form([oracle.grad() for oracle in self.oracles])
         mixing_matrix: Tensor = Tensor(next(self.topology))
 
         # apply mixing matrix to params
         x_next: Tensor = torch.matmul(mixing_matrix, x) - self.step_size * grad
 
-        self.wandb.log({
-            "x diff norm": (x - x_next).norm().mean(),
-            "consensus 0-1": (x[0] - x[1]).norm().mean(),
-            "consensus 0-last": (x[0] - x[-1]).norm().mean(),
-            "grad norm": grad.norm().mean(),
-            "grad max": grad.norm().max()
-        },
-            step=self.step_num
+        self.wandb.log(
+            {
+                "x diff norm": (x - x_next).norm().mean(),
+                "consensus 0-1": (x[0] - x[1]).norm().mean(),
+                "consensus 0-last": (x[0] - x[-1]).norm().mean(),
+                "grad norm": grad.norm().mean(),
+                "grad max": grad.norm().max(),
+            },
+            step=self.step_num,
         )
 
         x_next_list: list[list[Tensor]] = self.to_list_form(x_next)
@@ -48,7 +52,4 @@ class DecentralizedGradientDescent(BaseDecentralizedMethod):
 
     def log(self) -> dict[str, Any]:
         losses = [oracle() for oracle in self.oracles]
-        return {
-            "loss": sum(losses) / len(losses),
-            "losses": losses
-        }
+        return {"loss": sum(losses) / len(losses), "losses": losses}
